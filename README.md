@@ -54,6 +54,65 @@
 
 - 單元測試位於 `src/test/java`，可使用 `./gradlew test` 執行。
 
+## Docker
+
+這個專案提供一個簡單的 `Dockerfile`，是假設你已在本機使用 Gradle Wrapper 建置好可執行 jar（更快速且常見的工作流程）。步驟如下：
+
+1. 在專案根目錄建置 jar（會產生於 `build/libs/`）：
+
+```bash
+# 產生可執行的 Spring Boot jar
+./gradlew bootJar
+# 或完整 build（含測試）
+./gradlew build
+```
+
+2. 建置 Docker 映像：
+
+```bash
+# 從專案根目錄執行
+docker build -t ig-app:latest .
+```
+
+3. 執行容器（將本機 8080 對應到容器的 8080）：
+
+```bash
+docker run --rm -p 8080:8080 ig-app:latest
+```
+
+小提示：如果你想在 Docker 裡面執行完整的 build（CI 風格），我也可以還原 multi-stage 的 `Dockerfile`，讓容器內執行 `./gradlew bootJar`。
+
+## Docker（進階）
+
+本專案提供兩個 Dockerfile，分別適用於開發與正式環境：
+
+- `Dockerfile.dev`：開發/測試用，multi-stage，在容器內使用 Gradle 建置 jar，並預設啟用 `dev` profile（OpenAPI/Swagger 啟用）。
+- `Dockerfile.prod`：正式用，假設 jar 已由 CI 或本機建置好（`./gradlew bootJar`），此檔僅複製 artifact 並以 `prod` profile 執行（OpenAPI/Swagger 停用）。
+
+使用範例：
+
+1) 使用 `Dockerfile.dev`（在容器內完成 build 並以 dev profile 啟動）：
+
+```bash
+# 建置映像（指定 Dockerfile.dev）
+docker build -f Dockerfile.dev -t ig-app:dev .
+# 運行容器（dev profile，會啟用 OpenAPI）
+docker run --rm -p 8080:8080 ig-app:dev
+```
+
+2) 使用 `Dockerfile.prod`（先在主機建置 jar，再建置映像）：
+
+```bash
+# 在主機上先建置 jar
+./gradlew bootJar
+# 建置映像（使用預期已存在的 build/libs/*.jar）
+docker build -f Dockerfile.prod -t ig-app:prod .
+# 運行容器（prod profile，OpenAPI 停用）
+docker run --rm -p 8080:8080 ig-app:prod
+```
+
+註：如果你使用 CI 系統（例如 GitHub Actions、GitLab CI、Jenkins），建議在 CI 裡面先執行 `./gradlew bootJar` 或 `./gradlew build`，然後在構建 Docker 映像時使用 `Dockerfile.prod`，這樣可減少映像大小與建置時間。
+
 ## 其他 / 貢獻
 
 歡迎提出 issue 或 pull request。若要在本機快速開始，請確保已安裝合適的 JDK，然後執行 `./gradlew bootRun`。

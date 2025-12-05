@@ -1,0 +1,19 @@
+# 正式環境設定（profile: prod）
+# 正式環境不啟用 OpenAPI，以避免在 production 暴露 API 文件
+spring:
+  application:
+    name: Ig
+
+# 停用 Springdoc OpenAPI
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+# 伺服器設定：正式環境使用 8080（可由部署平台覆寫）
+server:
+  port: 8080
+
+# 備註：啟用方式：--spring.profiles.active=prod 或 設定環境變數 SPRING_PROFILES_ACTIVE=prod
+

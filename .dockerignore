@@ -1,0 +1,20 @@
+# Gradle and build artifacts
+.gradle
+build
+
+# Local IDE files
+.idea
+*.iml
+
+# OS files
+.DS_Store
+
+# Git
+.git
+
+# Temporary files
+tmp
+
+# Ignore Dockerfile if you have other docker configs
+Dockerfile.*
+
