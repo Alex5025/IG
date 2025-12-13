@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15
+    container_name: ig-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: iguser
+      POSTGRES_PASSWORD: igpassword
+      POSTGRES_DB: igdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./db-data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+
