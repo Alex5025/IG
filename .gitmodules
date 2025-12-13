@@ -1,0 +1,3 @@
+[submodule "subprojects/graph-api-webhooks-samples"]
+	path = subprojects/graph-api-webhooks-samples
+	url = https://github.com/fbsamples/graph-api-webhooks-samples.git
