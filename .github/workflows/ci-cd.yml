@@ -1,0 +1,71 @@
+name: CI/CD
+
+# 此工作流程負責：
+# 1) 在 PR / push 時執行單元測試
+# 2) 將通過測試的映像建置、推送到 Artifact Registry，並部署到 Cloud Run
+# 注意：下列 Secrets 需在 GitHub repository 設定（Settings → Secrets）
+# - GCP_PROJECT: GCP 專案 ID
+# - GCP_REGION: GCP 區域（例如 asia-southeast1）
+# - IMAGE_NAME: 映像庫/映像名稱
+# - GCP_SA_KEY: 以 JSON 格式的 GCP Service Account 金鑰（用於部署）
+# - CLOUD_RUN_SERVICE: Cloud Run 服務名稱
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Run tests
+        # 執行 Gradle 測試，若失敗整個 workflow 會停止
+        run: ./gradlew test --no-daemon
+
+  build-and-deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: ${{ secrets.GCP_PROJECT }}
+      REGION: ${{ secrets.GCP_REGION }}
+      IMAGE: ${{ secrets.IMAGE_NAME }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Build jar
+        # 建置可執行 jar（用於容器映像內的啟動檔）
+        run: ./gradlew bootJar --no-daemon
+      - name: Authenticate to Google Cloud
+        # 使用 Service Account 金鑰登入 gcloud，金鑰請存於 GitHub Secrets:GCP_SA_KEY
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+      - name: Configure Docker for Artifact Registry
+        # 配置 Docker 使用 gcloud 認證推送映像
+        run: |
+          gcloud --quiet auth configure-docker
+      - name: Build and push image
+        # 建置映像並推送至 Artifact Registry（IMAGE、PROJECT、REGION 由 Secrets 提供）
+        run: |
+          IMAGE_URI=${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/$IMAGE/$IMAGE:latest
+          docker build -t $IMAGE_URI .
+          docker push $IMAGE_URI
+      - name: Deploy to Cloud Run
+        # 將剛剛推送的映像部署到 Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v0
+        with:
+          service: ${{ secrets.CLOUD_RUN_SERVICE }}
+          image: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/$IMAGE/$IMAGE:latest
+          region: ${{ secrets.GCP_REGION }}

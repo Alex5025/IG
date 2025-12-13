@@ -1,20 +1,38 @@
-# Gradle and build artifacts
-.gradle
-build
+## -------------------------
+## 保留（Docker build 所需）
+## 以下為 Docker 建置時需要包含的檔案或路徑
+!/db/init.sql
+!/src/
+!/Dockerfile
+!/README.md
+!/gradle/wrapper/gradle-wrapper.jar
 
-# Local IDE files
-.idea
+## -------------------------
+## 忽略（本地資料與機密）
+db-data/
+.env
+secrets.properties
+
+## -------------------------
+## 忽略（建置輸出與快取）
+/build/
+/out/
+/target/
+/.gradle/
+
+## -------------------------
+## 忽略（IDE / OS / 日誌）
+/.idea/
+/.vscode/
 *.iml
-
-# OS files
+/logs/
+/tmp/
 .DS_Store
 
-# Git
-.git
+## -------------------------
+## 本地 Docker 覆寫檔（可帶入本地配置但不適合放入映像）
+docker-compose.override.yml
 
-# Temporary files
-tmp
-
-# Ignore Dockerfile if you have other docker configs
-Dockerfile.*
+## 忽略 SQL 備份檔，init.sql 會被保留於 repo
+*.sql
 

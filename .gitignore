@@ -1,37 +1,52 @@
-HELP.md
-.gradle
-build/
-!gradle/wrapper/gradle-wrapper.jar
-!**/src/main/**/build/
-!**/src/test/**/build/
+/ / Gradle / build
+## -------------------------
+## 保留（Whitelist）
+## 下面為必須保留於版本庫或 Docker build context 的檔案/路徑
+## - 初始化 SQL（供 docker-compose 掛載與 CI）
+## - 原始碼與建置必要檔案
+!/db/init.sql
+!/src/**
+!/Dockerfile
+!/README.md
+!/gradle/wrapper/gradle-wrapper.jar
 
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-bin/
-!**/src/main/**/bin/
-!**/src/test/**/bin/
+## -------------------------
+## Git 相關（可安全忽略於版本庫）
+.git
+.gitignore
 
-### IntelliJ IDEA ###
-.idea
-*.iws
+## -------------------------
+## 機密 / 環境變數（絕對不要提交）
+.env
+secrets.properties
+
+## -------------------------
+## 建置輸出與快取
+/build/
+/out/
+/target/
+/.gradle/
+
+## -------------------------
+## 本地執行資料（例如資料庫 runtime data）
+# Postgres bind mount - 不要提交資料庫檔案
+/db-data/
+
+## -------------------------
+## Docker（本地覆寫檔）
+docker-compose.override.yml
+
+## -------------------------
+## IDE 與開發工具
+/.idea/
 *.iml
-*.ipr
-out/
-!**/src/main/**/out/
-!**/src/test/**/out/
+/.vscode/
 
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
+## -------------------------
+## 日誌、暫存與作業系統檔
+/logs/
+/tmp/
+.DS_Store
 
-### VS Code ###
-.vscode/
+## 其他
+HELP.md
