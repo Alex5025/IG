@@ -1,29 +1,22 @@
 # 應用程式名稱
 spring:
-  application:
-    name: Ig
-
+  application.name: Ig
   # 關閉 GCP 自動設定（本機/開發用），避免缺少 ADC 時發生錯誤
-  cloud:
-    gcp:
-      enabled: false
+  cloud.gcp.enabled: false
 
   # 排除特定的 GCP 自動設定，避免建立不必要的客戶端（例如 Pub/Sub、Storage）
-  autoconfigure:
-    exclude:
-      - com.google.cloud.spring.autoconfigure.core.GcpContextAutoConfiguration
-      - com.google.cloud.spring.autoconfigure.pubsub.GcpPubSubAutoConfiguration
-      - com.google.cloud.spring.autoconfigure.storage.GcpStorageAutoConfiguration
+  autoconfigure.exclude:
+    - com.google.cloud.spring.autoconfigure.core.GcpContextAutoConfiguration
+    - com.google.cloud.spring.autoconfigure.pubsub.GcpPubSubAutoConfiguration
+    - com.google.cloud.spring.autoconfigure.storage.GcpStorageAutoConfiguration
 
 # 伺服器設定：HTTP 埠
-server:
-  port: 8080
+server.port: 8080
 
 # Springdoc OpenAPI 設定（可選）
 springdoc:
-  api-docs:
-    path: /v3/api-docs
-  swagger-ui:
-    path: /swagger-ui.html
+  api-docs.path: /v3/api-docs
+  swagger-ui.path: /swagger-ui.html
 
 # 注意：在生產或 GCP 環境可用 profile 或環境變數覆寫上述設定
+ig.verify.token: "fcaba18be0d3bfe851dafadc50e86892" # 範例 placeholder，可透過環境變數 IG_VERIFY_TOKEN 覆寫
