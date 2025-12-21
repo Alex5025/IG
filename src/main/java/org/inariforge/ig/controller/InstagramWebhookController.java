@@ -1,13 +1,22 @@
 package org.inariforge.ig.controller;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.inariforge.ig.service.InstagramMessageService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /**
@@ -18,9 +27,23 @@ import java.util.Map;
 @RestController
 public class InstagramWebhookController {
 
+    private static final Logger log = LoggerFactory.getLogger(InstagramWebhookController.class);
+
     // 驗證 token，建議在 Cloud Run 上透過 Secret Manager 注入為環境變數
     @Value("${ig.verify.token:${IG_VERIFY_TOKEN:}}")
     private String verifyToken;
+
+    // 用於驗證簽章 (App Secret)
+    @Value("${ig.app.secret:${IG_APP_SECRET:}}")
+    private String appSecret;
+
+    private final InstagramMessageService messageService;
+
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    public InstagramWebhookController(InstagramMessageService messageService) {
+        this.messageService = messageService;
+    }
 
     /**
      * 用於 Instagram Webhook 的驗證機制。
@@ -33,19 +56,66 @@ public class InstagramWebhookController {
             @RequestParam(name = "hub.verify_token", required = false) String token
     ) {
         if (mode != null && "subscribe".equals(mode) && token != null && token.equals(verifyToken)) {
+            log.info("Webhook verified successfully");
             return ResponseEntity.ok(challenge != null ? challenge : "");
         }
+        log.warn("Webhook verification failed: mode={} tokenMatches={}", mode, token != null && token.equals(verifyToken));
         return ResponseEntity.status(403).body("Verification token mismatch");
     }
 
     /**
      * 接收 Instagram 的事件通知。
-     * 實作中只回傳 200，實際應交由服務層處理事件解析與回覆邏輯。
+     * 1) 驗證 X-Hub-Signature-256（若設定了 App Secret）
+     * 2) 將事件委派給 `InstagramMessageService` 處理
      */
     @PostMapping("/webhook")
-    public ResponseEntity<String> receiveEvent(@RequestBody Map<String, Object> payload) {
-        // TODO: 驗證 X-Hub-Signature 或其他簽章，並將事件推入 event processor
-        // 暫時回傳 200
-        return ResponseEntity.ok("EVENT_RECEIVED");
+    public ResponseEntity<String> receiveEvent(
+            @RequestBody String body,
+            @RequestHeader(name = "X-Hub-Signature-256", required = false) String signatureHeader
+    ) {
+        try {
+            // 如果有設定 App Secret，嘗試驗證簽章
+            if (appSecret != null && !appSecret.isBlank()) {
+                if (signatureHeader == null || signatureHeader.isBlank()) {
+                    log.warn("Missing X-Hub-Signature-256 header");
+                    return ResponseEntity.status(403).body("Missing signature");
+                }
+                String expected = "sha256=" + hmacSha256Hex(appSecret, body);
+                if (!constantTimeEquals(expected, signatureHeader)) {
+                    log.warn("Signature mismatch: expected={} got={}", expected, signatureHeader);
+                    return ResponseEntity.status(403).body("Signature mismatch");
+                }
+            }
+
+            Map<String, Object> payload = mapper.readValue(body, new TypeReference<Map<String, Object>>() {});
+            messageService.processEvent(payload);
+            return ResponseEntity.ok("EVENT_RECEIVED");
+        } catch (Exception e) {
+            log.error("Failed to process webhook event", e);
+            return ResponseEntity.status(500).body("Error");
+        }
+    }
+
+    private static String hmacSha256Hex(String secret, String data) throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        SecretKeySpec keySpec = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+        mac.init(keySpec);
+        byte[] raw = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
+        StringBuilder sb = new StringBuilder(raw.length * 2);
+        for (byte b : raw) {
+            sb.append(String.format("%02x", b & 0xff));
+        }
+        return sb.toString();
+    }
+
+    // 時間攻擊安全的字串比較
+    private static boolean constantTimeEquals(String a, String b) {
+        if (a == null || b == null) return false;
+        if (a.length() != b.length()) return false;
+        int result = 0;
+        for (int i = 0; i < a.length(); i++) {
+            result |= a.charAt(i) ^ b.charAt(i);
+        }
+        return result == 0;
     }
 }

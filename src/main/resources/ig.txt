@@ -1,8 +1,0 @@
-curl -X POST \
-  'https://graph.instagram.com/v21.0/me/messages' \
-  -H 'Authorization: Bearer <YOUR_INSTAGRAM_ACCESS_TOKEN_HERE>' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "message": "{\"text\":\"Hello W1122\"}",
-    "recipient": "{\"id\":\"<RECIPIENT_ID_OR_EMPTY>\"}"
-  }'
