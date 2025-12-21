@@ -4,7 +4,8 @@ README — IG Webhook 測試與設定
 - 示範如何將 Instagram 的聊天室訊息傳入本專案的 Spring Boot 應用（/webhook），並確認應用能處理與回覆訊息。
 
 前置需求
-- 已建立 Facebook App，並將 Instagram Business/Creator 帳號連結到 Page。\n- App 已取得必要權限：`instagram_basic`、`instagram_manage_messages`、`pages_messaging`、`pages_manage_metadata`（依需求檢查）。
+- 已建立 Facebook App，並將 Instagram Business/Creator 帳號連結到 Page。
+- App 已取得必要權限：`instagram_basic`、`instagram_manage_messages`、`pages_messaging`、`pages_manage_metadata`（依需求檢查）。
 - 取得：`IG_APP_SECRET`、`IG_PAGE_ACCESS_TOKEN`（或發訊 token）、以及你自定的 `IG_VERIFY_TOKEN`。
 
 快速步驟
@@ -17,6 +18,10 @@ export IG_PAGE_ACCESS_TOKEN="your_page_access_token"
 export SHORT_TOKEN="your_short_token"
 export IG_RECIPIENT_ID="recipient_id_for_send_script"
 ```
+
+或使用 env 檔（建議）：
+- `./.env.development`：範本（可提交）
+- `./.env.local`：本機私密設定（不要提交，已在 `.gitignore` 忽略）
 
 2) 啟動應用
 
@@ -48,7 +53,10 @@ ngrok http 8080
 - 在啟動應用的終端查找關鍵字：`Webhook verified`、`IG message received`、`Sent IG message`。
 
 發送測試訊息（伺服端回覆）
-- 使用 `scripts/send-ig-message.sh` 可從伺服端發送簡單測試訊息（需 `IG_PAGE_ACCESS_TOKEN` 或 `SHORT_TOKEN` 與 `IG_RECIPIENT_ID` 已設定）。
+- 使用 `scripts/send-ig-message.sh` 可從伺服端發送簡單測試訊息（需 `IG_PAGE_ACCESS_TOKEN` 與 `IG_RECIPIENT_ID` 已設定）。
+
+本機 webhook 快速測試
+- 可用 `scripts/test-ig-webhook.sh` 驗證 `/webhook` 的 GET 驗證與 POST 接收流程（POST payload 為範例事件）。
 
 安全建議
 - 永遠不要把 `IG_APP_SECRET`、`IG_PAGE_ACCESS_TOKEN` 或 `SHORT_TOKEN` 提交到 Git。請使用環境變數或專用 secret manager（GCP Secret Manager、Vault、GitHub Secrets）。

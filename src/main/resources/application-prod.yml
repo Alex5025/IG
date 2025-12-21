@@ -8,12 +8,21 @@ spring:
 springdoc:
   api-docs:
     enabled: false
+    path: /v3/api-docs
   swagger-ui:
     enabled: false
-
+    path: /swagger-ui.html
 # 伺服器設定：正式環境使用 8080（可由部署平台覆寫）
 server:
   port: 8080
 
 # 備註：啟用方式：--spring.profiles.active=prod 或 設定環境變數 SPRING_PROFILES_ACTIVE=prod
 
+# 注意：在生產或 GCP 環境請用環境變數覆寫上述設定
+ig:
+# Instagram 驗證用 token（用於驗證 webhook 註冊，可透過環境變數 IG_VERIFY_TOKEN 覆寫）
+  verify.token: ${IG_VERIFY_TOKEN:}
+# Instagram App Secret（用於驗證 webhook 簽章，可透過環境變數 IG_APP_SECRET 覆寫）
+  app.secret: ${IG_APP_SECRET:}
+# 發送訊息用 access token（建議透過環境變數 IG_PAGE_ACCESS_TOKEN 注入）
+  page.access.token: ${IG_PAGE_ACCESS_TOKEN:}
