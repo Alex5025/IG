@@ -20,7 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /**
- * Instagram Webhook Controller
+ * Instagram Webhook 控制器
  *
  * 處理 Instagram Webhook 的驗證與事件接收。
  */
@@ -29,11 +29,11 @@ public class InstagramWebhookController {
 
     private static final Logger log = LoggerFactory.getLogger(InstagramWebhookController.class);
 
-    // 驗證 token，建議在 Cloud Run 上透過 Secret Manager 注入為環境變數
+    // 驗證用 token，建議在雲端環境透過 Secret Manager / 環境變數注入
     @Value("${ig.verify.token:${IG_VERIFY_TOKEN:}}")
     private String verifyToken;
 
-    // 用於驗證簽章 (App Secret)
+    // 用於驗證簽章（App Secret）
     @Value("${ig.app.secret:${IG_APP_SECRET:}}")
     private String appSecret;
 
@@ -47,7 +47,7 @@ public class InstagramWebhookController {
 
     /**
      * 用於 Instagram Webhook 的驗證機制。
-     * Instagram 會以 GET 要求來驗證 endpoint，帶入 hub.mode, hub.challenge, hub.verify_token
+     * Instagram 會以 GET 要求驗證 endpoint，帶入 hub.mode、hub.challenge、hub.verify_token。
      */
     @GetMapping("/webhook")
     public ResponseEntity<String> verifyWebhook(
@@ -66,11 +66,11 @@ public class InstagramWebhookController {
     /**
      * 接收 Instagram 的事件通知。
      * 1) 驗證 X-Hub-Signature-256（若設定了 App Secret）
-     * 2) 將事件委派給 `InstagramMessageService` 處理
+     * 2) 將事件委派給 InstagramMessageService 處理
      */
     @PostMapping("/webhook")
     public ResponseEntity<String> receiveEvent(
-            @RequestBody String body,
+            @RequestBody byte[] bodyBytes,
             @RequestHeader(name = "X-Hub-Signature-256", required = false) String signatureHeader
     ) {
         try {
@@ -80,14 +80,14 @@ public class InstagramWebhookController {
                     log.warn("Missing X-Hub-Signature-256 header");
                     return ResponseEntity.status(403).body("Missing signature");
                 }
-                String expected = "sha256=" + hmacSha256Hex(appSecret, body);
+                String expected = "sha256=" + hmacSha256Hex(appSecret, bodyBytes);
                 if (!constantTimeEquals(expected, signatureHeader)) {
                     log.warn("Signature mismatch: expected={} got={}", expected, signatureHeader);
                     return ResponseEntity.status(403).body("Signature mismatch");
                 }
             }
 
-            Map<String, Object> payload = mapper.readValue(body, new TypeReference<Map<String, Object>>() {});
+            Map<String, Object> payload = mapper.readValue(bodyBytes, new TypeReference<Map<String, Object>>() {});
             messageService.processEvent(payload);
             return ResponseEntity.ok("EVENT_RECEIVED");
         } catch (Exception e) {
@@ -96,11 +96,11 @@ public class InstagramWebhookController {
         }
     }
 
-    private static String hmacSha256Hex(String secret, String data) throws Exception {
+    private static String hmacSha256Hex(String secret, byte[] data) throws Exception {
         Mac mac = Mac.getInstance("HmacSHA256");
         SecretKeySpec keySpec = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
         mac.init(keySpec);
-        byte[] raw = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
+        byte[] raw = mac.doFinal(data);
         StringBuilder sb = new StringBuilder(raw.length * 2);
         for (byte b : raw) {
             sb.append(String.format("%02x", b & 0xff));
@@ -108,7 +108,7 @@ public class InstagramWebhookController {
         return sb.toString();
     }
 
-    // 時間攻擊安全的字串比較
+    // 防止時間差攻擊的字串比較
     private static boolean constantTimeEquals(String a, String b) {
         if (a == null || b == null) return false;
         if (a.length() != b.length()) return false;

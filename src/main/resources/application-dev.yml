@@ -17,7 +17,18 @@ server.port: 8080
 springdoc:
   api-docs.path: /v3/api-docs
   swagger-ui.path: /swagger-ui.html
-
+  cloud:
+    # GCP 自動設定：預設啟用（prod 不會被整體關掉）
+    # 本機若沒有 ADC/憑證：
+    # - 建議維持 enabled=true，但先關掉會嘗試建立客戶端的模組（Pub/Sub、Storage）
+    # - 或直接設 SPRING_CLOUD_GCP_ENABLED=false 以完全停用（僅限本機測試）
+    gcp:
+      enabled: ${SPRING_CLOUD_GCP_ENABLED:true}
+      # 本專案目前的 webhook/回覆流程不需要 Pub/Sub / Storage；預設關閉以避免本機缺少 ADC 時啟動失敗
+      pubsub:
+        enabled: ${SPRING_CLOUD_GCP_PUBSUB_ENABLED:false}
+      storage:
+        enabled: ${SPRING_CLOUD_GCP_STORAGE_ENABLED:false}
 # 注意：在生產或 GCP 環境請用環境變數覆寫上述設定
 ig:
 # Instagram 驗證用 token（用於驗證 webhook 註冊，可透過環境變數 IG_VERIFY_TOKEN 覆寫）
