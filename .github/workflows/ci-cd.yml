@@ -11,45 +11,91 @@ name: CI/CD
 # - CLOUD_RUN_SERVICE: Cloud Run 服務名稱
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
+  ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up JDK 17
+      - name: 取出程式碼
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: 設定 JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
-      - name: Run tests
-        # 執行 Gradle 測試，若失敗整個 workflow 會停止
-        run: ./gradlew test --no-daemon
+          java-version: '21'
 
-  build-and-deploy:
-    needs: test
+      - name: 驗證 Gradle Wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: 設定 Gradle（含快取）
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: 執行測試與建置
+        run: ./gradlew --no-daemon build
+
+      - name: 上傳測試報告（失敗也要保留）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            build/reports/tests/test
+            build/test-results/test
+
+  cd:
+    name: Deploy (Cloud Run)
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
     env:
       PROJECT_ID: ${{ secrets.GCP_PROJECT }}
       REGION: ${{ secrets.GCP_REGION }}
       IMAGE: ${{ secrets.IMAGE_NAME }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up JDK 17
+      - name: 取出程式碼
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: 設定 JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
-      - name: Build jar
-        # 建置可執行 jar（用於容器映像內的啟動檔）
-        run: ./gradlew bootJar --no-daemon
+          java-version: '21'
+
+      - name: 驗證 Gradle Wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: 設定 Gradle（含快取）
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: 建置 jar
+        run: ./gradlew --no-daemon bootJar
+
       - name: Authenticate to Google Cloud
         # 使用 Service Account 金鑰登入 gcloud，金鑰請存於 GitHub Secrets:GCP_SA_KEY
-        uses: google-github-actions/auth@v1
+        uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.GCP_SA_KEY }}'
       - name: Configure Docker for Artifact Registry
@@ -60,7 +106,7 @@ jobs:
         # 建置映像並推送至 Artifact Registry（IMAGE、PROJECT、REGION 由 Secrets 提供）
         run: |
           IMAGE_URI=${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/$IMAGE/$IMAGE:latest
-          docker build -t $IMAGE_URI .
+          docker build -f Dockerfile.prod -t $IMAGE_URI .
           docker push $IMAGE_URI
       - name: Deploy to Cloud Run
         # 將剛剛推送的映像部署到 Cloud Run
