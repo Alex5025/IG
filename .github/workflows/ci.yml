@@ -1,55 +1,93 @@
 name: CI
 
-# 目的：在 PR / push 時執行單元測試與建置（不含部署）
-# 設計重點：最小權限、快取 Gradle、避免重複佔用 runner
+# ------------------------------------------------------------
+# CI（持續整合）工作流程
+#
+# 目的
+# - 在 PR / push 時自動執行「建置 + 測試」，確保主幹品質
+# - 不包含部署（部署請獨立工作流程，避免把敏感權限/金鑰帶進 CI）
+#
+# 設計重點
+# - 最小權限：限制 GITHUB_TOKEN 只讀
+# - Concurrency：同一個分支只保留最新一次執行，避免浪費 runner
+# - Gradle 快取：加速依賴下載與後續建置
+# - 產物留存：即使失敗也上傳測試報告，方便排查
+# ------------------------------------------------------------
 
 on:
+  # PR 事件：針對 main 分支的 PR 進行檢查，避免未經測試就合併
   pull_request:
     branches:
       - main
+
+  # Push 事件：main 與 develop 的直接推送也會跑 CI（例如 hotfix 或開發分支整合）
   push:
     branches:
       - main
       - develop
+
+  # 手動觸發：需要臨時重跑或驗證某次修正時可用
   workflow_dispatch:
 
 permissions:
+  # 安全預設：僅允許讀取程式碼。
+  # 若未來需要回寫（例如自動更新 PR comment、建立 release），再針對該工作流程/job 增加最小必要權限。
   contents: read
 
 concurrency:
+  # 同一個分支（github.ref）同時只跑一個 CI：
+  # - 新推送會取消舊執行，避免重複佔用 runner
+  # - 對 PR 來說可讓檢查結果更貼近「最新 commit」
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   ci:
+    # 本工作流程只有一個 job（build+test）。若未來加入 lint / SAST / docker build，建議拆成多個 job 並平行化。
     runs-on: ubuntu-latest
+
+    # 逾時保護：避免卡住的 Gradle/測試把 runner 長時間佔用
     timeout-minutes: 20
     steps:
       - name: 取出程式碼
         uses: actions/checkout@v4
         with:
+          # 只抓最新一層 commit，加速 checkout。
+          # 需要完整 git history（例如產生 changelog、版號計算）時才調高或改為 0。
           fetch-depth: 1
 
       - name: 設定 JDK 21
         uses: actions/setup-java@v4
         with:
+          # 使用 Temurin（Adoptium）發行版，穩定且常用於 CI。
           distribution: temurin
+          # 與專案 Gradle toolchain（Java 21）一致，避免版本不一致造成編譯/測試差異。
           java-version: '21'
 
       - name: 驗證 Gradle Wrapper
         uses: gradle/actions/wrapper-validation@v4
 
+      # Gradle 快取：
+      # - 自動快取 ~/.gradle/caches 等資料，顯著加速第二次之後的 CI
+      # - 由 gradle/actions/setup-gradle 管理快取鍵與還原
+
       - name: 設定 Gradle（含快取）
         uses: gradle/actions/setup-gradle@v4
 
       - name: 執行測試與建置
+        # --no-daemon：CI 環境不需要長駐 daemon，避免背景程序殘留並提升可預期性。
+        # build：包含編譯、測試、打包（依專案設定）。若只想跑單元測試可改為 test。
         run: ./gradlew --no-daemon build
 
       - name: 上傳測試報告（失敗也要保留）
+        # always()：不論前一步成功/失敗都上傳，方便在 Actions UI 下載報告排查原因。
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-reports
+          # 常見測試報告位置：
+          # - build/reports/tests/test：HTML 報告
+          # - build/test-results/test：JUnit XML（可供其他工具解析）
           path: |
             build/reports/tests/test
             build/test-results/test

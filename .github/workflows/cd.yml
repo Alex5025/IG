@@ -1,26 +1,47 @@
 name: CD
 
-# 目的：只在 main 的 CI 成功後執行部署（Cloud Run）
-# 設計重點：CI/CD 分離，避免 PR 跑部署，並以 workflow_run 讓 CI 成功成為部署門檻
-# 注意：下列 Secrets 需在 GitHub repository 設定（Settings → Secrets）
-# - GCP_PROJECT: GCP 專案 ID
+# ------------------------------------------------------------
+# CD（持續部署）工作流程
+#
+# 目的
+# - 只在 main 分支的 CI 成功後才部署到 Cloud Run
+# - 避免 PR 或未通過測試的提交觸發部署
+#
+# 觸發策略
+# - 使用 workflow_run：把「CI 成功」視為部署門檻（gating）
+# - 保留 workflow_dispatch：必要時可手動部署（但仍建議只部署已驗證過的 commit）
+#
+# 安全與維運重點
+# - 最小權限：GITHUB_TOKEN 只讀（部署權限交由 GCP 身分驗證處理）
+# - Concurrency：同時間只允許一個部署，避免多次推送造成部署互相覆蓋
+# - Secret 管理：所有敏感資料都必須使用 GitHub Secrets（避免寫入 repo 或 log）
+#
+# 需要預先在 GitHub repository 設定 Secrets（Settings → Secrets and variables → Actions）
+# - GCP_PROJECT: GCP 專案 ID（例如 my-project-id）
 # - GCP_REGION: GCP 區域（例如 asia-southeast1）
-# - IMAGE_NAME: Artifact Registry repo / image 名稱（例如 ig）
-# - GCP_SA_KEY: 以 JSON 格式的 GCP Service Account 金鑰（用於部署）
+# - IMAGE_NAME: Artifact Registry 的 repo / image 名稱（此檔用同一個值當 repo 與 image tag 名）
+# - GCP_SA_KEY: GCP Service Account 金鑰（JSON 字串）。
+#   - 建議長期改用 OIDC（Workload Identity Federation）以移除長效金鑰風險；此處先保持原行為不改。
 # - CLOUD_RUN_SERVICE: Cloud Run 服務名稱
+# ------------------------------------------------------------
 
 on:
   workflow_run:
+    # 僅當名為「CI」的 workflow 結束後才觸發（不代表一定部署，是否部署由 job 的 if 條件決定）
     workflows:
       - CI
     types:
       - completed
   workflow_dispatch:
+    # 手動觸發：通常用在緊急重跑、或需要手動部署指定 commit 的情境。
 
 permissions:
+  # 安全預設：此工作流程不需要寫回 repo，因此只給 contents: read。
+  # 若未來要回寫 tag/release/PR comment，請只為需要的 job 增加最小必要權限。
   contents: read
 
 concurrency:
+  # 部署是「具狀態」操作：同一時間只跑一個，避免兩次部署互相覆蓋造成版本不一致。
   group: cd-main
   cancel-in-progress: true
 
@@ -28,11 +49,20 @@ jobs:
   deploy:
     name: Deploy (Cloud Run)
     runs-on: ubuntu-latest
+
+    # 逾時保護：避免 Docker build / push / deploy 卡住無限佔用 runner。
     timeout-minutes: 25
-    # 只允許 main 分支的 CI 成功後觸發部署
+
+    # 部署門檻（非常重要）：
+    # - workflow_dispatch：允許手動觸發
+    # - workflow_run：只允許「CI 結論 success」且來源分支是 main 的執行
+    #   這可避免 develop/feature 分支的 CI 完成後誤觸部署。
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+
+    # 環境變數（非敏感）：以 secrets 注入，避免硬編碼。
+    # 注意：這裡用 env 只是為了減少重複字串；敏感資料仍放 secrets（例如 SA Key）。
     env:
       PROJECT_ID: ${{ secrets.GCP_PROJECT }}
       REGION: ${{ secrets.GCP_REGION }}
@@ -41,45 +71,65 @@ jobs:
       - name: 取出程式碼
         uses: actions/checkout@v4
         with:
+          # 只抓最新一層 commit，加速 checkout。
           fetch-depth: 1
+          # workflow_run 事件要部署「CI 跑過的那個 commit」，因此使用 head_sha。
+          # workflow_dispatch 則退回使用目前觸發的 sha。
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: 設定 JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
+          # 與專案 Gradle toolchain（Java 21）一致，避免版本差異造成建置不一致。
           java-version: '21'
 
       - name: 驗證 Gradle Wrapper
         uses: gradle/actions/wrapper-validation@v4
 
       - name: 設定 Gradle（含快取）
+        # Gradle 快取：加速依賴下載與後續建置。
         uses: gradle/actions/setup-gradle@v4
 
       - name: 建置 jar
+        # 只建置 bootJar：
+        # - 這裡不跑測試，是因為部署門檻已由 CI 工作流程負責。
+        # - 若你希望部署前再次跑測試，可改成 build，但會增加部署時間。
         run: ./gradlew --no-daemon bootJar
 
       - name: Authenticate to Google Cloud
-        # 使用 Service Account 金鑰登入 gcloud（若你要改成 OIDC，可再調整）
+        # 使用 Service Account 金鑰登入 Google Cloud（目前為 JSON 金鑰方式）。
+        # 安全建議：長期應改用 OIDC（Workload Identity Federation）取代長效金鑰，降低外洩風險。
         uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.GCP_SA_KEY }}'
 
       - name: 安裝 gcloud CLI
+        # 安裝/設定 gcloud，供後續 configure-docker、以及必要時除錯。
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker for Artifact Registry
-        # 只設定對應區域的 registry host，避免過度授權
+        # 設定 Docker 對 Artifact Registry 的認證：
+        # - 只針對指定 REGION 的 host 設定，避免過度授權到其他 registry。
+        # - 若此步失敗，常見原因是 SA 權限不足（Artifact Registry Writer）
         run: |
           gcloud --quiet auth configure-docker "${REGION}-docker.pkg.dev"
 
       - name: Build and push image
+        # 建置並推送映像：
+        # - Dockerfile.prod 應為生產用映像設定（較小、較安全）
+        # - 目前 tag 固定 latest；若要可追溯性，通常會改成用 git sha 當 tag（此處僅註解不改行為）
         run: |
           IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${IMAGE}/${IMAGE}:latest"
           docker build -f Dockerfile.prod -t "$IMAGE_URI" .
           docker push "$IMAGE_URI"
 
       - name: Deploy to Cloud Run
+        # 部署到 Cloud Run：
+        # - 若失敗常見原因：
+        #   1) SA 權限不足（Cloud Run Admin / Service Account User / Artifact Registry Reader）
+        #   2) region/service 名稱錯誤
+        #   3) 映像 URI 路徑不正確或推送失敗
         uses: google-github-actions/deploy-cloudrun@v0
         with:
           service: ${{ secrets.CLOUD_RUN_SERVICE }}
