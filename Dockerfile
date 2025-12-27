@@ -1,5 +1,5 @@
 # 多階段 Dockerfile：第一階段在容器內用 Gradle 建置 jar，第二階段使用輕量 JRE 執行
-FROM gradle:7.6-jdk17 AS builder
+FROM gradle:jdk21 AS builder
 
 # 設定工作目錄
 WORKDIR /home/gradle/project
@@ -12,7 +12,7 @@ COPY --chown=gradle:gradle . .
 RUN gradle bootJar -x test --no-daemon
 
 # 第二階段：使用較小的 JRE 映像來執行應用
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:21-jre
 
 # 建立應用程式目錄
 WORKDIR /app

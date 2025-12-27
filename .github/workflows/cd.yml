@@ -135,3 +135,6 @@ jobs:
           service: ${{ secrets.CLOUD_RUN_SERVICE }}
           image: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/${{ secrets.IMAGE_NAME }}/${{ secrets.IMAGE_NAME }}:latest
           region: ${{ secrets.GCP_REGION }}
+          env_vars: |
+            IG_VERIFY_TOKEN=${{ secrets.IG_VERIFY_TOKEN }}
+            IG_APP_SECRET=${{ secrets.IG_APP_SECRET }}

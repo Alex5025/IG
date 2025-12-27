@@ -16,6 +16,7 @@ secrets.properties
 ## -------------------------
 ## 忽略（建置輸出與快取）
 /build/
+!/build/libs/
 /out/
 /target/
 /.gradle/
