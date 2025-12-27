@@ -52,6 +52,12 @@ public class InstagramMessageService {
 
                     // 確保發送者和訊息物件存在
                     if (sender != null && message != null) {
+                        // 忽略 Echo 訊息 (機器人自己發送的訊息)
+                        if (Boolean.TRUE.equals(message.get("is_echo"))) {
+                            log.info("忽略 Echo 訊息 (is_echo=true)");
+                            continue;
+                        }
+
                         String senderId = (String) sender.get("id");
                         String messageText = (String) message.get("text");
 

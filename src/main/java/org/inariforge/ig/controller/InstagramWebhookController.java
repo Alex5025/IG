@@ -82,7 +82,7 @@ public class InstagramWebhookController {
                 }
                 String expected = "sha256=" + hmacSha256Hex(appSecret, bodyBytes);
                 if (!constantTimeEquals(expected, signatureHeader)) {
-                    log.warn("Signature mismatch: expected={} got={}", expected, signatureHeader);
+                    log.warn("Signature mismatch");
                     return ResponseEntity.status(403).body("Signature mismatch");
                 }
             }
@@ -104,6 +104,14 @@ public class InstagramWebhookController {
         StringBuilder sb = new StringBuilder(raw.length * 2);
         for (byte b : raw) {
             sb.append(String.format("%02x", b & 0xff));
+        }
+        return sb.toString();
+    }
+
+    private static String bytesToHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b));
         }
         return sb.toString();
     }
