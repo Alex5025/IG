@@ -99,7 +99,7 @@ jobs:
       - name: Authenticate to Google Cloud
         # 使用 Service Account 金鑰登入 Google Cloud（目前為 JSON 金鑰方式）。
         # 安全建議：長期應改用 OIDC（Workload Identity Federation）取代長效金鑰，降低外洩風險。
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           credentials_json: '${{ secrets.GCP_SA_KEY }}'
 
@@ -130,7 +130,7 @@ jobs:
         #   1) SA 權限不足（Cloud Run Admin / Service Account User / Artifact Registry Reader）
         #   2) region/service 名稱錯誤
         #   3) 映像 URI 路徑不正確或推送失敗
-        uses: google-github-actions/deploy-cloudrun@v0
+        uses: google-github-actions/deploy-cloudrun@v3
         with:
           service: ${{ secrets.CLOUD_RUN_SERVICE }}
           image: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/gcp-ig-repo/webhook:latest
