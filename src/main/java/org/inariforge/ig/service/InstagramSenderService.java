@@ -5,6 +5,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
@@ -60,7 +64,9 @@ public class InstagramSenderService {
         while (attempts < maxAttempts) {
             attempts++;
             try {
-                Map response = restTemplate.postForObject(url, payload, Map.class);
+                ParameterizedTypeReference<Map<String, Object>> typeRef = new ParameterizedTypeReference<Map<String, Object>>() {};
+                ResponseEntity<Map<String, Object>> responseEntity = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(payload), typeRef);
+                Map<String, Object> response = responseEntity.getBody();
                 log.info("Sent IG message to {} (attempt={}): response={}", recipientId, attempts, response);
                 return;
             } catch (RestClientException e) {

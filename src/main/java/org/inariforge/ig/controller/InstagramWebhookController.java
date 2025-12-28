@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.util.Map;
 
 /**
@@ -53,13 +54,13 @@ public class InstagramWebhookController {
     public ResponseEntity<String> verifyWebhook(
             @RequestParam(name = "hub.mode", required = false) String mode,
             @RequestParam(name = "hub.challenge", required = false) String challenge,
-            @RequestParam(name = "hub.verify_token", required = false) String token
-    ) {
+            @RequestParam(name = "hub.verify_token", required = false) String token) {
         if (mode != null && "subscribe".equals(mode) && token != null && token.equals(verifyToken)) {
             log.info("Webhook verified successfully");
             return ResponseEntity.ok(challenge != null ? challenge : "");
         }
-        log.warn("Webhook verification failed: mode={} tokenMatches={}", mode, token != null && token.equals(verifyToken));
+        log.warn("Webhook verification failed: mode={} tokenMatches={}", mode,
+                token != null && token.equals(verifyToken));
         return ResponseEntity.status(403).body("Verification token mismatch");
     }
 
@@ -71,8 +72,7 @@ public class InstagramWebhookController {
     @PostMapping("/webhook")
     public ResponseEntity<String> receiveEvent(
             @RequestBody byte[] bodyBytes,
-            @RequestHeader(name = "X-Hub-Signature-256", required = false) String signatureHeader
-    ) {
+            @RequestHeader(name = "X-Hub-Signature-256", required = false) String signatureHeader) {
         try {
             // 如果有設定 App Secret，嘗試驗證簽章
             if (appSecret != null && !appSecret.isBlank()) {
@@ -87,7 +87,8 @@ public class InstagramWebhookController {
                 }
             }
 
-            Map<String, Object> payload = mapper.readValue(bodyBytes, new TypeReference<Map<String, Object>>() {});
+            Map<String, Object> payload = mapper.readValue(bodyBytes, new TypeReference<Map<String, Object>>() {
+            });
             messageService.processEvent(payload);
             return ResponseEntity.ok("EVENT_RECEIVED");
         } catch (Exception e) {
@@ -96,7 +97,7 @@ public class InstagramWebhookController {
         }
     }
 
-    private static String hmacSha256Hex(String secret, byte[] data) throws Exception {
+    private static String hmacSha256Hex(String secret, byte[] data) throws GeneralSecurityException {
         Mac mac = Mac.getInstance("HmacSHA256");
         SecretKeySpec keySpec = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
         mac.init(keySpec);
@@ -108,18 +109,12 @@ public class InstagramWebhookController {
         return sb.toString();
     }
 
-    private static String bytesToHex(byte[] bytes) {
-        StringBuilder sb = new StringBuilder();
-        for (byte b : bytes) {
-            sb.append(String.format("%02x", b));
-        }
-        return sb.toString();
-    }
-
     // 防止時間差攻擊的字串比較
     private static boolean constantTimeEquals(String a, String b) {
-        if (a == null || b == null) return false;
-        if (a.length() != b.length()) return false;
+        if (a == null || b == null)
+            return false;
+        if (a.length() != b.length())
+            return false;
         int result = 0;
         for (int i = 0; i < a.length(); i++) {
             result |= a.charAt(i) ^ b.charAt(i);
