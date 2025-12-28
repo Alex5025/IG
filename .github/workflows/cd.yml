@@ -66,7 +66,6 @@ jobs:
     env:
       PROJECT_ID: ${{ secrets.GCP_PROJECT }}
       REGION: ${{ secrets.GCP_REGION }}
-      IMAGE: ${{ secrets.IMAGE_NAME }}
     steps:
       - name: 取出程式碼
         uses: actions/checkout@v4
@@ -118,9 +117,10 @@ jobs:
       - name: Build and push image
         # 建置並推送映像：
         # - Dockerfile.prod 應為生產用映像設定（較小、較安全）
-        # - 目前 tag 固定 latest；若要可追溯性，通常會改成用 git sha 當 tag（此處僅註解不改行為）
+        # - Repository 名稱需與 Terraform (main.tf) 中定義的 google_artifact_registry_repository.repo.repository_id 一致 (gcp-ig-repo)
         run: |
-          IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${IMAGE}/${IMAGE}:latest"
+          # 格式: LOCATION-docker.pkg.dev/PROJECT-ID/REPOSITORY-ID/IMAGE:TAG
+          IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/gcp-ig-repo/webhook:latest"
           docker build -f Dockerfile.prod -t "$IMAGE_URI" .
           docker push "$IMAGE_URI"
 
@@ -133,8 +133,9 @@ jobs:
         uses: google-github-actions/deploy-cloudrun@v0
         with:
           service: ${{ secrets.CLOUD_RUN_SERVICE }}
-          image: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/${{ secrets.IMAGE_NAME }}/${{ secrets.IMAGE_NAME }}:latest
+          image: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/gcp-ig-repo/webhook:latest
           region: ${{ secrets.GCP_REGION }}
           env_vars: |
             IG_VERIFY_TOKEN=${{ secrets.IG_VERIFY_TOKEN }}
             IG_APP_SECRET=${{ secrets.IG_APP_SECRET }}
+            IG_PAGE_ACCESS_TOKEN=${{ secrets.IG_PAGE_ACCESS_TOKEN }}

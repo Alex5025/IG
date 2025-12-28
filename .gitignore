@@ -52,3 +52,10 @@ docker-compose.override.yml
 
 ## 其他
 HELP.md
+
+## -------------------------
+## Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+

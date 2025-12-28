@@ -14,7 +14,28 @@ provider "google" {
   region  = "asia-east1"
 }
 
-# 1. 定義 Cloud Run 服務
+# 1. 啟用必要的 Google Cloud APIs
+resource "google_project_service" "run_api" {
+  service = "run.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "artifact_registry_api" {
+  service = "artifactregistry.googleapis.com"
+  disable_on_destroy = false
+}
+
+# 2. 建立 Artifact Registry Repository (存放 Docker Image)
+resource "google_artifact_registry_repository" "repo" {
+  location      = "asia-east1"
+  repository_id = "gcp-ig-repo"
+  description   = "Docker repository for GCP IG Webhook"
+  format        = "DOCKER"
+
+  depends_on = [google_project_service.artifact_registry_api]
+}
+
+# 3. 定義 Cloud Run 服務
 resource "google_cloud_run_v2_service" "default" {
   name     = "gcp-ig-webhook"
   location = "asia-east1"
@@ -45,6 +66,8 @@ resource "google_cloud_run_v2_service" "default" {
       template[0].containers[0].env
     ]
   }
+
+  depends_on = [google_project_service.run_api]
 }
 
 # 2. 設定公開存取權限 (允許未驗證的調用 - Webhook 需要)
