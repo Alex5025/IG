@@ -8,10 +8,8 @@ terraform {
 }
 
 provider "google" {
-  # 請替換成您的 GCP Project ID
-  project = "gcp-ig-482520"
-  # 設定預設區域為台灣 (Tier 1 定價)
-  region  = "asia-east1"
+  project = var.project_id
+  region  = var.region
 }
 
 # 1. 啟用必要的 Google Cloud APIs
@@ -27,8 +25,8 @@ resource "google_project_service" "artifact_registry_api" {
 
 # 2. 建立 Artifact Registry Repository (存放 Docker Image)
 resource "google_artifact_registry_repository" "repo" {
-  location      = "asia-east1"
-  repository_id = "gcp-ig-repo"
+  location      = var.region
+  repository_id = var.repository_id
   description   = "Docker repository for GCP IG Webhook"
   format        = "DOCKER"
 
@@ -37,8 +35,8 @@ resource "google_artifact_registry_repository" "repo" {
 
 # 3. 定義 Cloud Run 服務
 resource "google_cloud_run_v2_service" "default" {
-  name     = "gcp-ig-webhook"
-  location = "asia-east1"
+  name     = var.service_name
+  location = var.region
   ingress  = "INGRESS_TRAFFIC_ALL"
 
   template {

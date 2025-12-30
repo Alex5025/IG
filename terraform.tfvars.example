@@ -1,0 +1,4 @@
+project_id    = "gcp-ig-482520"
+region        = "asia-east1"
+repository_id = "gcp-ig-repo"
+service_name  = "gcp-ig-webhook"
